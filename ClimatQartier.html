@@ -1,0 +1,2223 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClimatQuartier • Simuler le climat futur</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/shpjs@4.0.4/dist/shp.js"></script>
+    
+    <style>
+        :root {
+            --primary: #1A6153;      /* Vert forêt */
+            --primary-light: #3CA58C; /* Vert clair */
+            --accent: #2E2E2E;       /* Gris anthracite */
+            --white: #FFFFFF;        /* Blanc */
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --dark: #1e293b;
+            --light: #f8fafc;
+            --gray: #64748b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #1A6153 0%, #3CA58C 100%);
+            color: var(--dark);
+            min-height: 100vh;
+        }
+
+        .app-container {
+            display: grid;
+            grid-template-rows: auto 1fr;
+            height: 100vh;
+            gap: 0;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo-icon {
+            font-size: 2rem;
+            background: linear-gradient(135deg, var(--primary-light), var(--primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo-text h1 {
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .logo-text p {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9rem;
+        }
+
+        .scenario-tabs {
+            display: flex;
+            gap: 0.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50px;
+            padding: 0.5rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .scenario-tab {
+            padding: 0.7rem 1.5rem;
+            border-radius: 25px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            border: 2px solid transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .scenario-tab:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .scenario-tab.active {
+            background: white;
+            color: var(--primary);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Layout principal */
+        .main-content {
+            display: grid;
+            grid-template-columns: 350px 1fr 400px;
+            gap: 1rem;
+            padding: 1rem;
+            height: 100%;
+        }
+
+        /* Panneau de contrôle */
+        .control-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            overflow-y: auto;
+        }
+
+        .control-section {
+            margin-bottom: 2rem;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--dark);
+            font-weight: 600;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .city-selector {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.5rem;
+        }
+
+        .city-btn {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: left;
+        }
+
+        .city-btn:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(26, 97, 83, 0.1);
+        }
+
+        .city-btn.active {
+            border-color: var(--primary);
+            background: linear-gradient(135deg, #f0f9f7, #e8f5f2);
+        }
+
+        .city-flag {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+        }
+
+        .city-info {
+            flex: 1;
+        }
+
+        .city-name {
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        .city-region {
+            font-size: 0.8rem;
+            color: var(--gray);
+        }
+
+        .city-stats {
+            text-align: right;
+        }
+
+        .city-temp {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .city-change {
+            font-size: 0.7rem;
+            color: var(--success);
+        }
+
+        /* Simulation */
+        .simulation-controls {
+            background: #f8fafc;
+            padding: 1rem;
+            border-radius: 12px;
+        }
+
+        .horizon-slider {
+            width: 100%;
+            margin: 1rem 0;
+        }
+
+        .horizon-value {
+            text-align: center;
+            font-weight: 600;
+            color: var(--primary);
+            font-size: 1.1rem;
+            margin: 0.5rem 0;
+        }
+
+        .scenario-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .scenario-option {
+            padding: 0.8rem;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .scenario-option.active {
+            border-color: var(--primary);
+            background: var(--primary);
+            color: white;
+        }
+
+        .action-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.8rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .btn:hover {
+            background: var(--primary-light);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(26, 97, 83, 0.3);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: var(--dark);
+            border: 2px solid #e2e8f0;
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--primary);
+        }
+
+        /* Carte */
+        .map-container {
+            position: relative;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+            border-radius: 20px;
+        }
+
+        .map-overlay {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            right: 1rem;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 1rem 1.5rem;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .overlay-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .scenario-tag {
+            background: var(--accent);
+            color: white;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .current-city {
+            font-weight: 700;
+            color: var(--dark);
+            font-size: 1.1rem;
+        }
+
+        .city-description {
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+
+        /* Indicateurs */
+        .indicators-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            overflow-y: auto;
+        }
+
+        .indicators-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+
+        .indicator-card {
+            background: white;
+            padding: 1.2rem;
+            border-radius: 15px;
+            border-left: 4px solid var(--primary);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .indicator-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            border-left-color: var(--primary-light);
+        }
+
+        .indicator-card.active {
+            border-left-color: var(--danger);
+            background: linear-gradient(135deg, #fef7ed, #fef3c7);
+        }
+
+        .indicator-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.8rem;
+        }
+
+        .indicator-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+            font-size: 1.2rem;
+        }
+
+        .temp-icon { background: #f0f9f7; color: var(--primary); }
+        .heat-icon { background: #fee2e2; color: #dc2626; }
+        .rain-icon { background: #dbeafe; color: #2563eb; }
+        .urban-icon { background: #e0e7ff; color: #4f46e5; }
+        .nature-icon { background: #dcfce7; color: #16a34a; }
+
+        .indicator-info {
+            flex: 1;
+        }
+
+        .indicator-name {
+            font-weight: 600;
+            color: var(--dark);
+            font-size: 0.9rem;
+            margin-bottom: 0.2rem;
+        }
+
+        .indicator-desc {
+            font-size: 0.7rem;
+            color: var(--gray);
+        }
+
+        .indicator-value {
+            text-align: right;
+        }
+
+        .value-main {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--dark);
+        }
+
+        .value-change {
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .change-up { color: var(--danger); }
+        .change-down { color: var(--success); }
+
+        /* Graphique */
+        .chart-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 1.5rem;
+            margin: 0 1rem 1rem 1rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* Contrôles de couches améliorés */
+        .layer-controls {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 1rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 1000;
+            min-width: 200px;
+        }
+
+        .layer-title {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--dark);
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .layer-toggle {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .toggle-btn {
+            background: rgba(255,255,255,0.1);
+            border: 2px solid #e2e8f0;
+            color: var(--dark);
+            padding: 0.5rem 0.8rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.8rem;
+            text-align: center;
+        }
+
+        .toggle-btn.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        .toggle-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .basemap-controls {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        /* Légende améliorée */
+        .map-legend {
+            position: absolute;
+            bottom: 1rem;
+            left: 1rem;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 1rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 1000;
+            min-width: 180px;
+        }
+
+        .legend-title {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--dark);
+            font-size: 0.9rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.3rem;
+            font-size: 0.8rem;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 0.5rem;
+            border-radius: 4px;
+            border: 1px solid rgba(0, 0, 0, 0.2);
+        }
+
+        /* Panel d'information */
+        .info-panel {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            max-width: 400px;
+            width: 90%;
+            z-index: 2000;
+            display: none;
+        }
+
+        .info-panel.active {
+            display: block;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--gray);
+        }
+
+        .info-content h3 {
+            color: var(--primary);
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+        }
+
+        .info-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin: 1rem 0;
+            padding: 1rem;
+            background: #f8fafc;
+            border-radius: 8px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-weight: bold;
+            color: var(--primary);
+            font-size: 1.1rem;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--gray);
+        }
+
+        /* Vidéos éducatives */
+        .video-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .video-modal.active {
+            display: flex;
+        }
+
+        .video-container {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            max-width: 900px;
+            width: 95%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .video-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .video-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .close-video {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--gray);
+            transition: color 0.3s ease;
+        }
+
+        .close-video:hover {
+            color: var(--danger);
+        }
+
+        .video-player {
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+            background: #000;
+        }
+
+        .video-description {
+            color: var(--gray);
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+            font-size: 0.95rem;
+        }
+
+        .video-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+
+        .video-btn {
+            padding: 0.7rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .video-btn.primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .video-btn.secondary {
+            background: #f1f5f9;
+            color: var(--dark);
+        }
+
+        .video-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .video-trigger {
+            margin-top: 1rem;
+            text-align: center;
+        }
+
+        .video-preview {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.8rem;
+            background: linear-gradient(135deg, #f0f9f7, #e8f5f2);
+            border: 2px dashed var(--primary-light);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: var(--primary);
+            font-weight: 500;
+        }
+
+        .video-preview:hover {
+            background: linear-gradient(135deg, #e8f5f2, #d8f0ea);
+            transform: translateY(-2px);
+            border-color: var(--primary);
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        /* Messages d'erreur */
+        .error-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #ef4444;
+            color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            z-index: 10000;
+            max-width: 300px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .error-message button {
+            margin-left: 10px;
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        /* Loading */
+        .loading {
+            display: inline-block;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr auto;
+            }
+            
+            .layer-controls, .map-legend {
+                position: relative;
+                top: auto;
+                right: auto;
+                margin: 1rem;
+            }
+            
+            .video-container {
+                margin: 1rem;
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">
+                    <i class="fas fa-globe-europe"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>ClimatQuartier</h1>
+                    <p>Simuler le climat futur de votre territoire</p>
+                </div>
+            </div>
+            
+            <div class="scenario-tabs">
+                <div class="scenario-tab active" data-scenario="ssp2">
+                    <i class="fas fa-chart-line"></i> SSP2-4.5
+                </div>
+                <div class="scenario-tab" data-scenario="ssp5">
+                    <i class="fas fa-fire"></i> SSP5-8.5
+                </div>
+            </div>
+        </header>
+
+        <!-- Contenu principal -->
+        <div class="main-content">
+            <!-- Panneau de contrôle -->
+            <aside class="control-panel">
+                <div class="control-section">
+                    <div class="section-title">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>COMMUNES</span>
+                    </div>
+                    <div class="city-selector">
+                        <div class="city-btn active" data-city="cergy">
+                            <div class="city-flag" style="background: #f0f9f7; color: var(--primary);">
+                                <i class="fas fa-building"></i>
+                            </div>
+                            <div class="city-info">
+                                <div class="city-name">Cergy</div>
+                                <div class="city-region">Île-de-France</div>
+                            </div>
+                            <div class="city-stats">
+                                <div class="city-temp">13.8°C</div>
+                                <div class="city-change">+2.0°C</div>
+                            </div>
+                        </div>
+                        
+                        <div class="city-btn" data-city="annecy">
+                            <div class="city-flag" style="background: #dbeafe; color: #2563eb;">
+                                <i class="fas fa-mountain"></i>
+                            </div>
+                            <div class="city-info">
+                                <div class="city-name">Annecy</div>
+                                <div class="city-region">Auvergne-Rhône-Alpes</div>
+                            </div>
+                            <div class="city-stats">
+                                <div class="city-temp">11.5°C</div>
+                                <div class="city-change">+2.0°C</div>
+                            </div>
+                        </div>
+                        
+                        <div class="city-btn" data-city="saintmalo">
+                            <div class="city-flag" style="background: #dcfce7; color: #16a34a;">
+                                <i class="fas fa-water"></i>
+                            </div>
+                            <div class="city-info">
+                                <div class="city-name">Saint-Malo</div>
+                                <div class="city-region">Bretagne</div>
+                            </div>
+                            <div class="city-stats">
+                                <div class="city-temp">12.2°C</div>
+                                <div class="city-change">+2.2°C</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <div class="section-title">
+                        <i class="fas fa-sliders-h"></i>
+                        <span>SIMULATION CLIMATIQUE</span>
+                    </div>
+                    <div class="simulation-controls">
+                        <div style="text-align: center; margin-bottom: 1rem;">
+                            <div style="font-size: 0.8rem; color: var(--gray);">Horizon temporel</div>
+                            <div class="horizon-value" id="horizonValue">2030</div>
+                            <input type="range" id="horizonSlider" class="horizon-slider" 
+                                   min="2030" max="2100" step="10" value="2030">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--gray);">
+                                <span>2030</span>
+                                <span>2050</span>
+                                <span>2100</span>
+                            </div>
+                        </div>
+
+                        <div class="scenario-selector">
+                            <div class="scenario-option active" data-scenario="ssp2">
+                                SSP2-4.5<br>
+                                <small style="font-size: 0.7rem;">Modéré</small>
+                            </div>
+                            <div class="scenario-option" data-scenario="ssp5">
+                                SSP5-8.5<br>
+                                <small style="font-size: 0.7rem;">Extrême</small>
+                            </div>
+                        </div>
+
+                        <div class="action-buttons">
+                            <button class="btn" id="simulateBtn">
+                                <i class="fas fa-play"></i> Lancer simulation
+                            </button>
+                            <button class="btn btn-secondary" id="resetBtn">
+                                <i class="fas fa-redo"></i> Réinitialiser
+                            </button>
+                        </div>
+
+                        <!-- Déclencheur vidéo -->
+                        <div class="video-trigger">
+                            <div class="video-preview" id="videoTrigger">
+                                <i class="fas fa-play-circle"></i>
+                                Voir l'impact du scénario
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <div class="section-title">
+                        <i class="fas fa-chart-line"></i>
+                        <span>IMPACTS PROJETÉS</span>
+                    </div>
+                    <div id="impactsContainer" style="background: #f8fafc; padding: 1rem; border-radius: 10px;">
+                        <!-- Les impacts seront générés dynamiquement -->
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Carte -->
+            <main class="map-container">
+                <div id="map"></div>
+                <div class="map-overlay">
+                    <div class="overlay-header">
+                        <div class="current-city">Cergy - Île-de-France</div>
+                        <div class="scenario-tag">SSP2-4.5 • Horizon 2030</div>
+                    </div>
+                    <div class="city-description">
+                        Simulation en cours • Données projetées
+                    </div>
+                </div>
+
+                <!-- Contrôles des couches améliorés -->
+                <div class="layer-controls">
+                    <div class="layer-title">
+                        <i class="fas fa-layer-group"></i> Couches Communes
+                    </div>
+                    <div class="layer-toggle">
+                        <div class="toggle-btn active" onclick="app.toggleCommuneLayer('annecy')">
+                            🏔️ Annecy
+                        </div>
+                        <div class="toggle-btn active" onclick="app.toggleCommuneLayer('cergy')">
+                            🏙️ Cergy
+                        </div>
+                        <div class="toggle-btn active" onclick="app.toggleCommuneLayer('saintmalo')">
+                            🌊 Saint-Malo
+                        </div>
+                    </div>
+                    
+                    <div class="basemap-controls">
+                        <div class="layer-title">
+                            <i class="fas fa-map"></i> Fond de carte
+                        </div>
+                        <div class="layer-toggle">
+                            <div class="toggle-btn active" onclick="app.changeBasemap('osm')">
+                                Standard
+                            </div>
+                            <div class="toggle-btn" onclick="app.changeBasemap('satellite')">
+                                Satellite
+                            </div>
+                            <div class="toggle-btn" onclick="app.changeBasemap('dark')">
+                                Sombre
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Légende améliorée -->
+                <div class="map-legend">
+                    <div class="legend-title">Légende - Communes</div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #e74c3c;"></div>
+                        <span>Annecy</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #2ecc71;"></div>
+                        <span>Cergy</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #3498db;"></div>
+                        <span>Saint-Malo</span>
+                    </div>
+                </div>
+
+                <!-- Panel d'information -->
+                <div class="info-panel" id="info-panel">
+                    <button class="close-btn" onclick="app.closeInfoPanel()">×</button>
+                    <div class="info-content" id="info-content">
+                        <!-- Contenu généré dynamiquement -->
+                    </div>
+                </div>
+            </main>
+
+            <!-- Indicateurs -->
+            <aside class="indicators-panel">
+                <div class="section-title">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>INDICATEURS SIMULÉS</span>
+                </div>
+                
+                <div class="indicators-grid">
+                    <div class="indicator-card active" data-indicator="temp">
+                        <div class="indicator-header">
+                            <div class="indicator-icon temp-icon">
+                                <i class="fas fa-thermometer-half"></i>
+                            </div>
+                            <div class="indicator-info">
+                                <div class="indicator-name">Température moyenne</div>
+                                <div class="indicator-desc">Projection annuelle</div>
+                            </div>
+                            <div class="indicator-value">
+                                <div class="value-main">15.2°C</div>
+                                <div class="value-change change-up">+1.4°C</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="indicator-card" data-indicator="heatwave">
+                        <div class="indicator-header">
+                            <div class="indicator-icon heat-icon">
+                                <i class="fas fa-fire"></i>
+                            </div>
+                            <div class="indicator-info">
+                                <div class="indicator-name">Jours de canicule</div>
+                                <div class="indicator-desc">> 30°C</div>
+                            </div>
+                            <div class="indicator-value">
+                                <div class="value-main">14 jours</div>
+                                <div class="value-change change-up">+6 jours</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="indicator-card" data-indicator="precipitation">
+                        <div class="indicator-header">
+                            <div class="indicator-icon rain-icon">
+                                <i class="fas fa-cloud-rain"></i>
+                            </div>
+                            <div class="indicator-info">
+                                <div class="indicator-name">Précipitations</div>
+                                <div class="indicator-desc">Cumul annuel</div>
+                            </div>
+                            <div class="indicator-value">
+                                <div class="value-main">665 mm</div>
+                                <div class="value-change change-down">-5%</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="indicator-card" data-indicator="icu">
+                        <div class="indicator-header">
+                            <div class="indicator-icon urban-icon">
+                                <i class="fas fa-city"></i>
+                            </div>
+                            <div class="indicator-info">
+                                <div class="indicator-name">Îlot de chaleur</div>
+                                <div class="indicator-desc">Intensité ICU</div>
+                            </div>
+                            <div class="indicator-value">
+                                <div class="value-main">2.0°C</div>
+                                <div class="value-change change-up">+0.5°C</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="indicator-card" data-indicator="vegetation">
+                        <div class="indicator-header">
+                            <div class="indicator-icon nature-icon">
+                                <i class="fas fa-leaf"></i>
+                            </div>
+                            <div class="indicator-info">
+                                <div class="indicator-name">Végétalisation</div>
+                                <div class="indicator-desc">Couvert végétal</div>
+                            </div>
+                            <div class="indicator-value">
+                                <div class="value-main">27%</div>
+                                <div class="value-change change-down">-3%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- Graphique -->
+        <div class="chart-container">
+            <canvas id="tempChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Modal vidéo -->
+    <div class="video-modal" id="videoModal">
+        <div class="video-container">
+            <div class="video-header">
+                <h2 class="video-title" id="videoTitle">Impact du scénario climatique</h2>
+                <button class="close-video" id="closeVideo">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="video-player">
+                <video id="climateVideo" width="100%" controls poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='450' viewBox='0 0 800 450'%3E%3Crect width='800' height='450' fill='%231A6153'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='Arial' font-size='24' fill='white'%3EClimatQuartier - Simulation Climatique%3C/text%3E%3C/svg%3E">
+                    <source id="videoSource" src="" type="video/mp4">
+                    Votre navigateur ne supporte pas la lecture de vidéos.
+                </video>
+            </div>
+            
+            <div class="video-description" id="videoDescription">
+                Cette vidéo illustre les impacts du scénario climatique sélectionné sur votre territoire.
+            </div>
+            
+            <div class="video-actions">
+                <button class="video-btn secondary" id="shareVideo">
+                    <i class="fas fa-share"></i> Partager
+                </button>
+                <button class="video-btn primary" id="closeVideoBtn">
+                    <i class="fas fa-check"></i> Compris
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        class ClimatQuartierApp {
+            constructor() {
+                this.zones = {
+                    cergy: {
+                        name: "Cergy",
+                        region: "Île-de-France",
+                        center: [49.0379, 2.0693],
+                        bounds: [[49.017, 2.03], [49.058, 2.11]],
+                        color: '#2ecc71',
+                        description: 'Cergy est une ville nouvelle dynamique, pôle économique et universitaire important.',
+                        population: '66,401',
+                        superficie: '11.68 km²',
+                        current: { 
+                            temp: 13.8, heatwave: 8, precipitation: 700, icu: 1.5, vegetation: 30 
+                        },
+                        simulations: {
+                            ssp2: {
+                                2030: { temp: 15.2, heatwave: 14, precipitation: 665, icu: 2.0, vegetation: 27 },
+                                2050: { temp: 16.8, heatwave: 22, precipitation: 630, icu: 2.5, vegetation: 24 },
+                                2100: { temp: 18.1, heatwave: 28, precipitation: 595, icu: 3.0, vegetation: 21 }
+                            },
+                            ssp5: {
+                                2030: { temp: 15.8, heatwave: 16, precipitation: 650, icu: 2.2, vegetation: 26 },
+                                2050: { temp: 18.0, heatwave: 30, precipitation: 590, icu: 3.0, vegetation: 22 },
+                                2100: { temp: 21.2, heatwave: 45, precipitation: 520, icu: 4.0, vegetation: 18 }
+                            }
+                        }
+                    },
+                    annecy: {
+                        name: "Annecy",
+                        region: "Auvergne-Rhône-Alpes", 
+                        center: [45.8992, 6.1294],
+                        bounds: [[45.87, 6.08], [45.93, 6.18]],
+                        color: '#e74c3c',
+                        description: 'Annecy, surnommée la "Venise des Alpes", est célèbre pour son lac et sa vieille ville médiévale.',
+                        population: '126,924',
+                        superficie: '66.93 km²',
+                        current: { 
+                            temp: 11.5, heatwave: 5, precipitation: 1200, icu: 1.2, vegetation: 45 
+                        },
+                        simulations: {
+                            ssp2: {
+                                2030: { temp: 13.1, heatwave: 9, precipitation: 1140, icu: 1.7, vegetation: 42 },
+                                2050: { temp: 14.7, heatwave: 15, precipitation: 1080, icu: 2.2, vegetation: 39 },
+                                2100: { temp: 16.0, heatwave: 22, precipitation: 1020, icu: 2.7, vegetation: 36 }
+                            },
+                            ssp5: {
+                                2030: { temp: 13.7, heatwave: 11, precipitation: 1120, icu: 1.9, vegetation: 41 },
+                                2050: { temp: 15.9, heatwave: 23, precipitation: 1040, icu: 2.7, vegetation: 37 },
+                                2100: { temp: 19.1, heatwave: 38, precipitation: 960, icu: 3.7, vegetation: 33 }
+                            }
+                        }
+                    },
+                    saintmalo: {
+                        name: "Saint-Malo",
+                        region: "Bretagne",
+                        center: [48.6493, -2.0257],
+                        bounds: [[48.62, -2.07], [48.68, -1.98]],
+                        color: '#3498db',
+                        description: 'Saint-Malo, cité corsaire historique, est une destination balnéaire prisée.',
+                        population: '46,803',
+                        superficie: '36.58 km²',
+                        current: { 
+                            temp: 12.2, heatwave: 3, precipitation: 750, icu: 0.8, vegetation: 28 
+                        },
+                        simulations: {
+                            ssp2: {
+                                2030: { temp: 13.8, heatwave: 6, precipitation: 712, icu: 1.3, vegetation: 25 },
+                                2050: { temp: 15.4, heatwave: 12, precipitation: 674, icu: 1.8, vegetation: 22 },
+                                2100: { temp: 16.7, heatwave: 18, precipitation: 636, icu: 2.3, vegetation: 19 }
+                            },
+                            ssp5: {
+                                2030: { temp: 14.4, heatwave: 8, precipitation: 700, icu: 1.5, vegetation: 24 },
+                                2050: { temp: 16.6, heatwave: 20, precipitation: 650, icu: 2.3, vegetation: 20 },
+                                2100: { temp: 19.8, heatwave: 35, precipitation: 580, icu: 3.3, vegetation: 16 }
+                            }
+                        }
+                    }
+                };
+
+                // Vidéos éducatives
+                this.videos = {
+                    ssp2: {
+                        title: "🌱 Scénario Modéré SSP2-4.5 : Notre Avenir Durable",
+                        description: "Ce scénario représente une voie de développement durable où les émissions atteignent un pic vers 2050 puis déclinent progressivement.",
+                        videoUrl: "https://assets.codepen.io/148180/climate-scenario-ssp2.mp4",
+                        impacts: [
+                            "📈 Hausse modérée des températures (+1.5°C à 2.5°C)",
+                            "🌡️ Vagues de chaleur plus fréquentes mais gérables",
+                            "💧 Modifications des régimes de précipitations",
+                            "🌳 Adaptation progressive des écosystèmes"
+                        ]
+                    },
+                    ssp5: {
+                        title: "🔥 Scénario Extrême SSP5-8.5 : L'Urgence Climatique", 
+                        description: "Ce scénario représente la voie la plus pessimiste avec une forte dépendance aux énergies fossiles.",
+                        videoUrl: "https://assets.codepen.io/148180/climate-scenario-ssp5.mp4",
+                        impacts: [
+                            "🌡️ Hausse drastique des températures (+3°C à 5°C)",
+                            "🔥 Multiplication des canicules et sécheresses",
+                            "🌀 Événements climatiques extrêmes fréquents",
+                            "🏭 Stress hydrique et alimentaire accru"
+                        ]
+                    }
+                };
+
+                // Configuration des communes pour les shapefiles
+                this.communesConfig = {
+                    'annecy': { path: 'Annecy/Annecy.shp', color: '#e74c3c' },
+                    'cergy': { path: 'Cergy/Cergy.shp', color: '#2ecc71' },
+                    'saintmalo': { path: 'Saint-Malo/Saint-Malo.shp', color: '#3498db' }
+                };
+
+                this.currentZone = 'cergy';
+                this.currentScenario = 'ssp2';
+                this.currentHorizon = 2030;
+                this.currentLayer = 'temperature';
+                this.isSimulating = false;
+                this.tempChart = null;
+                this.map = null;
+                this.markers = [];
+                this.areaLayers = {};
+                this.communeLayers = {};
+                this.baseLayers = {};
+                this.currentBasemap = 'osm';
+
+                this.init();
+            }
+
+            async init() {
+                try {
+                    this.validateData();
+                    await this.initializeMap();
+                    this.setupEventListeners();
+                    this.setupVideoHandlers();
+                    this.updateUI();
+                    this.updateImpacts();
+                    console.log('ClimatQuartier initialisé avec succès');
+                } catch (error) {
+                    console.error('Erreur lors de l\'initialisation:', error);
+                    this.showError('Erreur de chargement de l\'application');
+                }
+            }
+
+            initializeMap() {
+                return new Promise((resolve, reject) => {
+                    try {
+                        // Initialisation de la carte
+                        this.map = L.map('map', {
+                            zoomControl: false,
+                            attributionControl: false
+                        }).setView([46.8, 2.5], 6);
+
+                        // Configuration des couches de base
+                        this.baseLayers = {
+                            osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                                attribution: '© OpenStreetMap contributors',
+                                maxZoom: 19
+                            }),
+                            satellite: L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+                                maxZoom: 20,
+                                subdomains: ['mt0','mt1','mt2','mt3']
+                            }),
+                            dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                                attribution: '© OpenStreetMap, © CartoDB',
+                                maxZoom: 19
+                            })
+                        };
+
+                        this.baseLayers.osm.addTo(this.map);
+
+                        // Ajout du contrôle de zoom
+                        L.control.zoom({
+                            position: 'bottomright'
+                        }).addTo(this.map);
+
+                        // Chargement des shapefiles
+                        this.loadAllCommunes();
+                        resolve();
+                    } catch (error) {
+                        reject(error);
+                    }
+                });
+            }
+
+            async loadAllCommunes() {
+                for (const communeId of Object.keys(this.communesConfig)) {
+                    await this.loadCommune(communeId);
+                }
+            }
+
+            async loadCommune(communeId) {
+                const commune = this.zones[communeId];
+                const config = this.communesConfig[communeId];
+                
+                try {
+                    // Simulation du chargement d'un shapefile
+                    // En production, remplacer par le chargement réel du shapefile
+                    const geojson = await this.createSimulatedGeoJSON(commune);
+                    
+                    this.communeLayers[communeId] = L.geoJSON(geojson, {
+                        style: {
+                            color: config.color,
+                            weight: 3,
+                            fillColor: config.color,
+                            fillOpacity: 0.3
+                        },
+                        onEachFeature: (feature, layer) => {
+                            // Style au survol
+                            layer.on('mouseover', function() {
+                                layer.setStyle({
+                                    weight: 4,
+                                    fillOpacity: 0.5
+                                });
+                            });
+                            
+                            layer.on('mouseout', function() {
+                                layer.setStyle({
+                                    weight: 3,
+                                    fillOpacity: 0.3
+                                });
+                            });
+                            
+                            // Clic sur la commune
+                            layer.on('click', (e) => {
+                                this.showCommuneInfo(communeId, e.latlng);
+                            });
+                        }
+                    }).addTo(this.map);
+                    
+                    console.log(`✅ ${commune.name} chargée avec succès`);
+                    
+                } catch (error) {
+                    console.error(`❌ Erreur chargement ${commune.name}:`, error);
+                    // Création d'un marqueur de secours
+                    this.communeLayers[communeId] = L.marker(commune.center)
+                        .addTo(this.map)
+                        .bindPopup(`<b>${commune.name}</b><br>${commune.description}`);
+                }
+            }
+
+            createSimulatedGeoJSON(commune) {
+                // Simulation d'un GeoJSON pour la démonstration
+                // En production, remplacer par le chargement réel du shapefile
+                return {
+                    type: "FeatureCollection",
+                    features: [{
+                        type: "Feature",
+                        properties: {
+                            name: commune.name,
+                            population: commune.population
+                        },
+                        geometry: {
+                            type: "Polygon",
+                            coordinates: [[
+                                [commune.bounds[0][1], commune.bounds[0][0]],
+                                [commune.bounds[1][1], commune.bounds[0][0]],
+                                [commune.bounds[1][1], commune.bounds[1][0]],
+                                [commune.bounds[0][1], commune.bounds[1][0]],
+                                [commune.bounds[0][1], commune.bounds[0][0]]
+                            ]]
+                        }
+                    }]
+                };
+            }
+
+            // Fonctions de contrôle des couches
+            toggleCommuneLayer(communeId) {
+                const layer = this.communeLayers[communeId];
+                const buttons = document.querySelectorAll('.layer-toggle .toggle-btn');
+                const button = buttons[Object.keys(this.communesConfig).indexOf(communeId)];
+                
+                if (layer) {
+                    if (this.map.hasLayer(layer)) {
+                        this.map.removeLayer(layer);
+                        button.classList.remove('active');
+                    } else {
+                        this.map.addLayer(layer);
+                        button.classList.add('active');
+                    }
+                }
+            }
+
+            changeBasemap(basemapType) {
+                // Mettre à jour les boutons
+                const basemapButtons = document.querySelectorAll('.basemap-controls .toggle-btn');
+                basemapButtons.forEach(btn => btn.classList.remove('active'));
+                event.target.classList.add('active');
+                
+                // Changer la couche de base
+                this.map.removeLayer(this.baseLayers[this.currentBasemap]);
+                this.baseLayers[basemapType].addTo(this.map);
+                this.currentBasemap = basemapType;
+            }
+
+            showCommuneInfo(communeId, latlng) {
+                const commune = this.zones[communeId];
+                const panel = document.getElementById('info-panel');
+                const content = document.getElementById('info-content');
+                
+                content.innerHTML = `
+                    <h3>${commune.name}</h3>
+                    <p>${commune.description}</p>
+                    <div class="info-stats">
+                        <div class="stat-item">
+                            <div class="stat-value">${commune.population}</div>
+                            <div class="stat-label">Habitants</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${commune.superficie}</div>
+                            <div class="stat-label">Superficie</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${commune.region.split('-')[0]}</div>
+                            <div class="stat-label">Région</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${this.getDepartment(communeId)}</div>
+                            <div class="stat-label">Département</div>
+                        </div>
+                    </div>
+                    <p><strong>🌡️ Données climatiques actuelles :</strong></p>
+                    <div style="font-size: 0.9rem; color: var(--gray);">
+                        Température: ${commune.current.temp}°C | 
+                        Jours de canicule: ${commune.current.heatwave} | 
+                        Précipitations: ${commune.current.precipitation}mm
+                    </div>
+                `;
+                
+                panel.classList.add('active');
+            }
+
+            getDepartment(communeId) {
+                const departments = {
+                    'annecy': 'Haute-Savoie',
+                    'cergy': 'Val-d\'Oise', 
+                    'saintmalo': 'Ille-et-Vilaine'
+                };
+                return departments[communeId];
+            }
+
+            closeInfoPanel() {
+                document.getElementById('info-panel').classList.remove('active');
+            }
+
+            // ... (le reste des méthodes existantes reste inchangé)
+            setupVideoHandlers() {
+                const videoModal = document.getElementById('videoModal');
+                const closeVideo = document.getElementById('closeVideo');
+                const closeVideoBtn = document.getElementById('closeVideoBtn');
+                const videoTrigger = document.getElementById('videoTrigger');
+                const shareVideo = document.getElementById('shareVideo');
+                const climateVideo = document.getElementById('climateVideo');
+                const videoSource = document.getElementById('videoSource');
+
+                videoTrigger.addEventListener('click', () => {
+                    this.openVideoModal();
+                });
+
+                const closeModal = () => {
+                    videoModal.classList.remove('active');
+                    climateVideo.pause();
+                };
+
+                closeVideo.addEventListener('click', closeModal);
+                closeVideoBtn.addEventListener('click', closeModal);
+
+                shareVideo.addEventListener('click', () => {
+                    this.shareVideo();
+                });
+
+                videoModal.addEventListener('click', (e) => {
+                    if (e.target === videoModal) {
+                        closeModal();
+                    }
+                });
+
+                climateVideo.addEventListener('ended', () => {
+                    closeVideoBtn.focus();
+                });
+            }
+
+            openVideoModal() {
+                const videoModal = document.getElementById('videoModal');
+                const videoTitle = document.getElementById('videoTitle');
+                const videoDescription = document.getElementById('videoDescription');
+                const climateVideo = document.getElementById('climateVideo');
+                const videoSource = document.getElementById('videoSource');
+
+                const videoData = this.videos[this.currentScenario];
+
+                videoTitle.textContent = videoData.title;
+                
+                let descriptionHTML = `
+                    <p>${videoData.description}</p>
+                    <div style="margin-top: 1rem; padding: 1rem; background: #f8fafc; border-radius: 8px;">
+                        <strong style="color: var(--primary);">Impacts principaux :</strong>
+                        <ul style="margin-top: 0.5rem; padding-left: 1.2rem;">
+                `;
+                
+                videoData.impacts.forEach(impact => {
+                    descriptionHTML += `<li style="margin-bottom: 0.3rem;">${impact}</li>`;
+                });
+                
+                descriptionHTML += `</ul></div>`;
+                videoDescription.innerHTML = descriptionHTML;
+
+                const demoVideos = {
+                    ssp2: "https://assets.codepen.io/148180/climate-scenario-ssp2.mp4",
+                    ssp5: "https://assets.codepen.io/148180/climate-scenario-ssp5.mp4"
+                };
+
+                videoSource.src = demoVideos[this.currentScenario];
+                climateVideo.load();
+
+                videoModal.classList.add('active');
+                climateVideo.currentTime = 0;
+                
+                const playPromise = climateVideo.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.log('Lecture automatique bloquée');
+                        videoDescription.innerHTML += `
+                            <div style="margin-top: 1rem; padding: 0.8rem; background: #fef3c7; border-radius: 6px; text-align: center;">
+                                <i class="fas fa-play-circle" style="color: #d97706;"></i>
+                                <span style="color: #92400e; font-size: 0.9rem;">Cliquez sur le bouton lecture pour démarrer la vidéo</span>
+                            </div>
+                        `;
+                    });
+                }
+            }
+
+            shareVideo() {
+                const videoData = this.videos[this.currentScenario];
+                const shareText = `🔍 Découvrez l'impact du ${videoData.title} sur ClimatQuartier\n\n${window.location.href}\n\n#ClimatQuartier #ChangementClimatique`;
+                
+                if (navigator.share) {
+                    navigator.share({
+                        title: videoData.title,
+                        text: shareText,
+                        url: window.location.href
+                    }).catch(err => {
+                        this.copyToClipboard(shareText);
+                    });
+                } else {
+                    this.copyToClipboard(shareText);
+                }
+            }
+
+            copyToClipboard(text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    this.showMessage('✅ Lien copié dans le presse-papier !');
+                }).catch(err => {
+                    prompt('📋 Copiez ce lien pour partager:', text);
+                });
+            }
+
+            showMessage(message) {
+                const messageDiv = document.createElement('div');
+                messageDiv.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: #10b981;
+                    color: white;
+                    padding: 1rem;
+                    border-radius: 8px;
+                    z-index: 10000;
+                    max-width: 300px;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+                `;
+                messageDiv.innerHTML = `
+                    ${message}
+                    <button onclick="this.parentElement.remove()" style="margin-left: 10px; background: none; border: none; color: white; cursor: pointer; font-weight: bold;">×</button>
+                `;
+                document.body.appendChild(messageDiv);
+                
+                setTimeout(() => {
+                    if (messageDiv.parentElement) {
+                        messageDiv.remove();
+                    }
+                }, 3000);
+            }
+
+            createTerritoryLayers() {
+                Object.values(this.areaLayers).forEach(layer => {
+                    if (layer) this.map.removeLayer(layer);
+                });
+                this.areaLayers = {};
+
+                Object.keys(this.zones).forEach(zone => {
+                    const currentData = this.zones[zone].current;
+                    const simData = this.zones[zone].simulations[this.currentScenario]?.[this.currentHorizon];
+                    const data = this.isSimulating ? simData : currentData;
+                    
+                    const bounds = this.zones[zone].bounds;
+                    const rectangle = L.rectangle(bounds, {
+                        color: this.getLayerColor(data, this.currentLayer),
+                        weight: 2,
+                        fillColor: this.getLayerColor(data, this.currentLayer),
+                        fillOpacity: 0.4,
+                        className: 'territory-layer'
+                    }).addTo(this.map);
+
+                    rectangle.bindPopup(this.createTerritoryPopup(zone, data));
+                    this.areaLayers[zone] = rectangle;
+
+                    const marker = this.createCenterMarker(zone, data);
+                    if (marker) {
+                        this.markers.push(marker);
+                        this.zones[zone].marker = marker;
+                    }
+                });
+
+                this.map.fitBounds(this.zones[this.currentZone].bounds);
+            }
+
+            createCenterMarker(zone, data) {
+                try {
+                    const temp = data.temp;
+                    const color = this.getTemperatureColor(temp);
+                    
+                    const icon = L.divIcon({
+                        className: this.isSimulating ? 'pulse' : '',
+                        html: this.createMarkerHTML(temp, color, zone),
+                        iconSize: [45, 45],
+                        iconAnchor: [22, 22]
+                    });
+
+                    const marker = L.marker(this.zones[zone].center, { icon }).addTo(this.map);
+                    
+                    marker.bindPopup(this.createPopupContent(zone));
+                    marker.on('click', () => {
+                        this.switchCity(zone);
+                    });
+
+                    return marker;
+                } catch (error) {
+                    console.error(`Erreur lors de la création du marqueur pour ${zone}:`, error);
+                    return null;
+                }
+            }
+
+            getLayerColor(data, layerType) {
+                switch(layerType) {
+                    case 'temperature':
+                        return this.getTemperatureColor(data.temp);
+                    case 'heatwave':
+                        if (data.heatwave < 10) return '#3b82f6';
+                        if (data.heatwave < 20) return '#f59e0b';
+                        return '#ef4444';
+                    case 'vegetation':
+                        if (data.vegetation > 40) return '#16a34a';
+                        if (data.vegetation > 25) return '#22c55e';
+                        return '#ef4444';
+                    default:
+                        return this.getTemperatureColor(data.temp);
+                }
+            }
+
+            updateTerritoryLayers() {
+                Object.keys(this.zones).forEach(zone => {
+                    const layer = this.areaLayers[zone];
+                    if (layer) {
+                        const currentData = this.zones[zone].current;
+                        const simData = this.zones[zone].simulations[this.currentScenario][this.currentHorizon];
+                        const data = this.isSimulating ? simData : currentData;
+                        
+                        layer.setStyle({
+                            color: this.getLayerColor(data, this.currentLayer),
+                            fillColor: this.getLayerColor(data, this.currentLayer)
+                        });
+
+                        layer.setPopupContent(this.createTerritoryPopup(zone, data));
+                    }
+                });
+            }
+
+            createTerritoryPopup(zone, data) {
+                return `
+                    <div style="min-width: 250px; font-family: 'Inter', sans-serif;">
+                        <div style="font-weight: bold; color: #1e293b; margin-bottom: 10px; font-size: 1.1em; border-bottom: 2px solid #1A6153; padding-bottom: 5px;">
+                            ${this.zones[zone].name} - Territoire communal
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.9em; margin: 10px 0;">
+                            <div><i class="fas fa-thermometer-half" style="color: #d97706;"></i> ${data.temp}°C</div>
+                            <div><i class="fas fa-fire" style="color: #dc2626;"></i> ${data.heatwave} j canicule</div>
+                            <div><i class="fas fa-cloud-rain" style="color: #2563eb;"></i> ${data.precipitation} mm</div>
+                            <div><i class="fas fa-leaf" style="color: #16a34a;"></i> ${data.vegetation}% végétal</div>
+                        </div>
+                        <div style="margin-top: 10px; padding: 8px; background: #f8fafc; border-radius: 6px; font-size: 0.8em; color: #64748b; text-align: center;">
+                            <i class="fas fa-${this.isSimulating ? 'chart-line' : 'info-circle'}"></i> 
+                            ${this.isSimulating ? 
+                                `Simulation ${this.currentScenario.toUpperCase()} • ${this.currentHorizon}` : 
+                                'Situation actuelle (2025)'}
+                        </div>
+                        <div style="margin-top: 8px; text-align: center;">
+                            <button onclick="app.switchCity('${zone}')" style="background: #1A6153; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em;">
+                                Voir les détails
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            createMarkerHTML(temp, color, zone) {
+                return `
+                    <div style="
+                        width: 45px; height: 45px; 
+                        background: ${color}; 
+                        border: 3px solid white;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: white;
+                        font-weight: bold;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                        font-size: 0.8rem;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                    " title="${this.zones[zone].name}">
+                        ${temp.toFixed(1)}°
+                    </div>
+                `;
+            }
+
+            getTemperatureColor(temp) {
+                if (temp < 12) return '#3b82f6';
+                if (temp < 16) return '#10b981';
+                if (temp < 20) return '#f59e0b';
+                return '#ef4444';
+            }
+
+            createPopupContent(zone) {
+                try {
+                    const currentData = this.zones[zone].current;
+                    const simData = this.zones[zone].simulations[this.currentScenario][this.currentHorizon];
+                    const data = this.isSimulating ? simData : currentData;
+                    
+                    return `
+                        <div style="min-width: 220px; font-family: 'Inter', sans-serif;">
+                            <div style="font-weight: bold; color: #1e293b; margin-bottom: 10px; font-size: 1.1em;">
+                                ${this.zones[zone].name}
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.9em;">
+                                <div><i class="fas fa-thermometer-half" style="color: #d97706;"></i> ${data.temp}°C</div>
+                                <div><i class="fas fa-fire" style="color: #dc2626;"></i> ${data.heatwave} j canicule</div>
+                                <div><i class="fas fa-cloud-rain" style="color: #2563eb;"></i> ${data.precipitation} mm</div>
+                                <div><i class="fas fa-leaf" style="color: #16a34a;"></i> ${data.vegetation}% végétal</div>
+                            </div>
+                            <div style="margin-top: 10px; padding: 8px; background: #f8fafc; border-radius: 6px; font-size: 0.8em; color: #64748b;">
+                                <i class="fas fa-${this.isSimulating ? 'chart-line' : 'info-circle'}"></i> 
+                                ${this.isSimulating ? 
+                                    `Simulation ${this.currentScenario.toUpperCase()} • ${this.currentHorizon}` : 
+                                    'Situation actuelle (2025)'}
+                            </div>
+                        </div>
+                    `;
+                } catch (error) {
+                    console.error(`Erreur lors de la création du popup pour ${zone}:`, error);
+                    return `<div>Erreur de chargement des données</div>`;
+                }
+            }
+
+            updateUI() {
+                try {
+                    this.updateIndicators();
+                    this.updateMap();
+                    this.updateScenarioTabs();
+                    this.updateCityButtons();
+                    this.updateChart();
+                    this.updateOverlay();
+                    this.updateTerritoryLayers();
+                } catch (error) {
+                    console.error('Erreur lors de la mise à jour de l\'interface:', error);
+                    this.showError('Erreur d\'affichage des données');
+                }
+            }
+
+            updateIndicators() {
+                try {
+                    const currentData = this.zones[this.currentZone].current;
+                    const simData = this.zones[this.currentZone].simulations[this.currentScenario][this.currentHorizon];
+                    const data = this.isSimulating ? simData : currentData;
+                    const baseData = this.zones[this.currentZone].current;
+                    
+                    document.querySelectorAll('.indicator-card').forEach(card => {
+                        const indicator = card.dataset.indicator;
+                        const valueElement = card.querySelector('.value-main');
+                        const changeElement = card.querySelector('.value-change');
+                        
+                        if (valueElement) {
+                            valueElement.textContent = this.formatValue(indicator, data[indicator]);
+                        }
+                        
+                        if (changeElement && this.isSimulating) {
+                            const change = data[indicator] - baseData[indicator];
+                            const percentChange = ((change / baseData[indicator]) * 100).toFixed(1);
+                            changeElement.textContent = `${change > 0 ? '+' : ''}${percentChange}%`;
+                            changeElement.className = `value-change ${change > 0 ? 'change-up' : 'change-down'}`;
+                        } else if (changeElement) {
+                            changeElement.textContent = 'Données actuelles';
+                            changeElement.className = 'value-change';
+                        }
+                    });
+                } catch (error) {
+                    console.error('Erreur lors de la mise à jour des indicateurs:', error);
+                }
+            }
+
+            formatValue(indicator, value) {
+                const formats = {
+                    'temp': v => `${v.toFixed(1)}°C`,
+                    'heatwave': v => `${v} jours`,
+                    'precipitation': v => `${v} mm`,
+                    'icu': v => `${v.toFixed(1)}°C`,
+                    'vegetation': v => `${v}%`
+                };
+                return formats[indicator] ? formats[indicator](value) : value;
+            }
+
+            updateMap() {
+                try {
+                    this.map.fitBounds(this.zones[this.currentZone].bounds);
+                    
+                    this.markers.forEach(marker => {
+                        if (marker && marker.getElement) {
+                            const element = marker.getElement();
+                            if (element) {
+                                element.style.display = 'block';
+                            }
+                        }
+                    });
+                } catch (error) {
+                    console.error('Erreur lors de la mise à jour de la carte:', error);
+                }
+            }
+
+            updateOverlay() {
+                try {
+                    document.querySelector('.current-city').textContent = 
+                        `${this.zones[this.currentZone].name} - ${this.zones[this.currentZone].region}`;
+                    
+                    const scenarioLabel = this.currentScenario === 'ssp2' ? 'SSP2-4.5 (Modéré)' : 'SSP5-8.5 (Extrême)';
+                    document.querySelector('.scenario-tag').textContent = 
+                        `${scenarioLabel} • Horizon ${this.currentHorizon}`;
+                    
+                    document.querySelector('.city-description').textContent = 
+                        this.isSimulating ? 'Simulation en cours • Données projetées' : 'Situation actuelle • Données 2025';
+                } catch (error) {
+                    console.error('Erreur lors de la mise à jour de l\'overlay:', error);
+                }
+            }
+
+            updateScenarioTabs() {
+                try {
+                    document.querySelectorAll('.scenario-tab').forEach(tab => {
+                        tab.classList.toggle('active', tab.dataset.scenario === this.currentScenario);
+                    });
+                    
+                    document.querySelectorAll('.scenario-option').forEach(option => {
+                        option.classList.toggle('active', option.dataset.scenario === this.currentScenario);
+                    });
+                } catch (error) {
+                    console.error('Erreur lors de la mise à jour des onglets de scénario:', error);
+                }
+            }
+
+            updateCityButtons() {
+                try {
+                    document.querySelectorAll('.city-btn').forEach(btn => {
+                        btn.classList.toggle('active', btn.dataset.city === this.currentZone);
+                        
+                        const city = btn.dataset.city;
+                        const currentData = this.zones[city].current;
+                        const simData = this.zones[city].simulations[this.currentScenario][this.currentHorizon];
+                        const temp = this.isSimulating ? simData.temp : currentData.temp;
+                        
+                        btn.querySelector('.city-temp').textContent = `${temp.toFixed(1)}°C`;
+                        
+                        if (this.isSimulating) {
+                            const change = temp - currentData.temp;
+                            btn.querySelector('.city-change').textContent = `${change > 0 ? '+' : ''}${change.toFixed(1)}°C`;
+                            btn.querySelector('.city-change').style.color = change > 0 ? '#ef4444' : '#10b981';
+                        } else {
+                            btn.querySelector('.city-change').textContent = 'Actuel';
+                            btn.querySelector('.city-change').style.color = '#64748b';
+                        }
+                    });
+                } catch (error) {
+                    console.error('Erreur lors de la mise à jour des boutons de ville:', error);
+                }
+            }
+
+            updateChart() {
+                try {
+                    const ctx = document.getElementById('tempChart').getContext('2d');
+                    const data = this.zones[this.currentZone];
+                    const horizons = [2030, 2050, 2100];
+                    
+                    if (this.tempChart) {
+                        this.tempChart.destroy();
+                    }
+
+                    const ssp2Data = horizons.map(horizon => data.simulations.ssp2[horizon].temp);
+                    const ssp5Data = horizons.map(horizon => data.simulations.ssp5[horizon].temp);
+
+                    this.tempChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: horizons,
+                            datasets: [
+                                {
+                                    label: 'SSP2-4.5 (Modéré)',
+                                    data: ssp2Data,
+                                    borderColor: '#1A6153',
+                                    backgroundColor: 'rgba(26, 97, 83, 0.1)',
+                                    borderWidth: 3,
+                                    tension: 0.4,
+                                    fill: true
+                                },
+                                {
+                                    label: 'SSP5-8.5 (Extrême)',
+                                    data: ssp5Data,
+                                    borderColor: '#ef4444',
+                                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                    borderWidth: 3,
+                                    tension: 0.4,
+                                    fill: true
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: `Projection des températures - ${data.name}`,
+                                    font: { size: 16, weight: 'bold' }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return `${context.dataset.label}: ${context.parsed.y}°C`;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: false,
+                                    title: {
+                                        display: true,
+                                        text: 'Température (°C)'
+                                    }
+                                },
+                                x: {
+                                    title: {
+                                        display: true,
+                                        text: 'Horizon'
+                                    }
+                                }
+                            }
+                        }
+                    });
+                } catch (error) {
+                    console.error('Erreur lors de la mise à jour du graphique:', error);
+                }
+            }
+
+            updateImpacts() {
+                try {
+                    const container = document.getElementById('impactsContainer');
+                    const data = this.zones[this.currentZone].simulations[this.currentScenario][this.currentHorizon];
+                    const currentData = this.zones[this.currentZone].current;
+
+                    const impacts = [
+                        {
+                            icon: 'fa-temperature-high',
+                            label: 'Vagues de chaleur',
+                            value: `+${data.heatwave - currentData.heatwave} jours`,
+                            color: '#ef4444'
+                        },
+                        {
+                            icon: 'fa-tint',
+                            label: 'Précipitations',
+                            value: `${(((data.precipitation - currentData.precipitation) / currentData.precipitation) * 100).toFixed(1)}%`,
+                            color: '#2563eb'
+                        },
+                        {
+                            icon: 'fa-tree',
+                            label: 'Végétation',
+                            value: `${(((data.vegetation - currentData.vegetation) / currentData.vegetation) * 100).toFixed(1)}%`,
+                            color: '#10b981'
+                        },
+                        {
+                            icon: 'fa-city',
+                            label: 'Îlot de chaleur',
+                            value: `+${(data.icu - currentData.icu).toFixed(1)}°C`,
+                            color: '#f59e0b'
+                        }
+                    ];
+
+                    container.innerHTML = impacts.map(impact => `
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; padding: 0.5rem; background: white; border-radius: 8px;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fas ${impact.icon}" style="color: ${impact.color};"></i>
+                                <span style="font-size: 0.8rem;">${impact.label}</span>
+                            </div>
+                            <span style="font-weight: 600; color: ${impact.color}; font-size: 0.9rem;">${impact.value}</span>
+                        </div>
+                    `).join('');
+                } catch (error) {
+                    console.error('Erreur lors de la mise à jour des impacts:', error);
+                    document.getElementById('impactsContainer').innerHTML = '<div style="color: #ef4444; text-align: center;">Erreur de chargement des données</div>';
+                }
+            }
+
+            setupEventListeners() {
+                // Slider d'horizon avec debounce
+                let sliderTimeout;
+                document.getElementById('horizonSlider').addEventListener('input', (e) => {
+                    clearTimeout(sliderTimeout);
+                    sliderTimeout = setTimeout(() => {
+                        this.currentHorizon = parseInt(e.target.value);
+                        document.getElementById('horizonValue').textContent = this.currentHorizon;
+                        if (this.isSimulating) {
+                            this.updateUI();
+                            this.updateImpacts();
+                        }
+                    }, 100);
+                });
+
+                // Gestionnaire unique pour les scénarios
+                const scenarioHandler = (e) => {
+                    const newScenario = e.currentTarget.dataset.scenario;
+                    if (newScenario !== this.currentScenario) {
+                        this.currentScenario = newScenario;
+                        if (this.isSimulating) {
+                            this.updateUI();
+                            this.updateImpacts();
+                        }
+                    }
+                };
+
+                document.querySelectorAll('.scenario-tab, .scenario-option').forEach(element => {
+                    element.addEventListener('click', scenarioHandler);
+                });
+
+                // Villes
+                document.querySelectorAll('.city-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        this.switchCity(e.currentTarget.dataset.city);
+                    });
+                });
+
+                // Fermer le panel d'info en cliquant sur la carte
+                this.map.on('click', () => {
+                    this.closeInfoPanel();
+                });
+
+                // Empêcher la double exécution de la simulation
+                let isSimulating = false;
+                document.getElementById('simulateBtn').addEventListener('click', () => {
+                    if (isSimulating) return;
+                    
+                    isSimulating = true;
+                    this.isSimulating = true;
+                    
+                    const btn = document.getElementById('simulateBtn');
+                    btn.innerHTML = '<i class="fas fa-sync-alt loading"></i> Simulation active';
+                    btn.style.background = '#10b981';
+                    btn.disabled = true;
+                    
+                    setTimeout(() => {
+                        this.updateUI();
+                        this.updateImpacts();
+                        btn.disabled = false;
+                        isSimulating = false;
+                    }, 800);
+                });
+
+                // Reset amélioré
+                document.getElementById('resetBtn').addEventListener('click', () => {
+                    this.isSimulating = false;
+                    this.currentHorizon = 2030;
+                    document.getElementById('horizonSlider').value = 2030;
+                    document.getElementById('horizonValue').textContent = '2030';
+                    
+                    const btn = document.getElementById('simulateBtn');
+                    btn.innerHTML = '<i class="fas fa-play"></i> Lancer simulation';
+                    btn.style.background = '';
+                    
+                    this.updateUI();
+                    this.updateImpacts();
+                });
+
+                // Indicateurs
+                document.querySelectorAll('.indicator-card').forEach(card => {
+                    card.addEventListener('click', (e) => {
+                        document.querySelectorAll('.indicator-card').forEach(c => c.classList.remove('active'));
+                        e.currentTarget.classList.add('active');
+                    });
+                });
+            }
+
+            switchCity(city) {
+                this.currentZone = city;
+                this.updateUI();
+                this.updateImpacts();
+                this.map.fitBounds(this.zones[city].bounds);
+            }
+
+            validateData() {
+                const requiredFields = ['temp', 'heatwave', 'precipitation', 'icu', 'vegetation'];
+                
+                Object.keys(this.zones).forEach(zone => {
+                    const data = this.zones[zone];
+                    if (!data.current || !data.simulations) {
+                        throw new Error(`Données manquantes pour ${zone}`);
+                    }
+                    
+                    requiredFields.forEach(field => {
+                        if (data.current[field] === undefined) {
+                            throw new Error(`Champ ${field} manquant pour ${zone}`);
+                        }
+                    });
+                    
+                    Object.keys(data.simulations).forEach(scenario => {
+                        Object.keys(data.simulations[scenario]).forEach(horizon => {
+                            const simData = data.simulations[scenario][horizon];
+                            requiredFields.forEach(field => {
+                                if (simData[field] === undefined) {
+                                    throw new Error(`Champ ${field} manquant pour ${zone} - ${scenario} - ${horizon}`);
+                                }
+                            });
+                        });
+                    });
+                });
+            }
+
+            showError(message) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-message';
+                errorDiv.innerHTML = `
+                    <strong>Erreur:</strong> ${message}
+                    <button onclick="this.parentElement.remove()">×</button>
+                `;
+                document.body.appendChild(errorDiv);
+                
+                setTimeout(() => {
+                    if (errorDiv.parentElement) {
+                        errorDiv.remove();
+                    }
+                }, 5000);
+            }
+        }
+
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            window.app = new ClimatQuartierApp();
+        });
+    </script>
+</body>
+</html>
